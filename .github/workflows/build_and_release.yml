@@ -1,0 +1,118 @@
+name: Release Application
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.3
+
+    - name: Setup NuGet
+      uses: nuget/setup-nuget@v1
+      with:
+        nuget-version: 'latest'
+
+    - name: Restore NuGet packages
+      run: nuget restore FileHasher.csproj -PackagesDirectory packages
+
+    - name: Build project
+      run: msbuild FileHasher.csproj /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath="./build/"
+
+    - name: Prepare single executable
+      run: |
+        # 创建输出目录
+        if (!(Test-Path "./release-files")) { New-Item -ItemType Directory -Path "./release-files" }
+
+        # 由于这个项目只使用 .NET Framework 基础库，单个 exe 文件就足够了
+        Copy-Item "./build/FileHasher.exe" "./release-files/"
+
+        # 检查是否有其他依赖的 DLL 文件需要合并
+        $dllFiles = Get-ChildItem -Path "./build/" -Filter "*.dll" | Where-Object { $_.Name -notlike "System.*" -and $_.Name -notlike "Microsoft.*" }
+
+        if ($dllFiles.Count -gt 0) {
+          Write-Host "Found external dependencies that need to be merged:"
+          $dllFiles | ForEach-Object { Write-Host "  - $($_.Name)" }
+
+          # 如果有外部依赖，我们需要使用 ILMerge
+          Write-Host "Installing ILMerge for dependency merging..."
+          nuget install ILMerge -OutputDirectory packages
+
+          $ilMergePath = Get-ChildItem -Path "packages" -Filter "ILMerge.exe" -Recurse | Select-Object -First 1
+
+          if ($ilMergePath) {
+            $ilMergeExe = $ilMergePath.FullName
+            $mainAssembly = "./build/FileHasher.exe"
+            $dependencies = $dllFiles | ForEach-Object { $_.FullName }
+
+            Write-Host "Merging with ILMerge..."
+            & $ilMergeExe /target:winexe /targetplatform:"v4.0" /out:"./release-files/FileHasher.exe" $mainAssembly $dependencies
+
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "ILMerge failed"
+              exit 1
+            }
+          }
+        } else {
+          Write-Host "No external dependencies found. Single exe is sufficient."
+        }
+
+        # 验证最终文件
+        if (Test-Path "./release-files/FileHasher.exe") {
+          $fileSize = (Get-Item "./release-files/FileHasher.exe").Length
+          Write-Host "Final executable size: $([math]::Round($fileSize / 1MB, 2)) MB"
+          Write-Host "✅ Single executable ready!"
+        } else {
+          Write-Error "Failed to create single executable"
+          exit 1
+        }
+      shell: pwsh
+
+    - name: Archive release files
+      run: |
+        $version = "${{ github.event.inputs.version }}"
+        $zipFileName = "FileHasher-v${version}.zip"
+        Compress-Archive -Path "release-files/FileHasher.exe" -DestinationPath $zipFileName
+        echo "ZIP_FILE_NAME=$zipFileName" >> $env:GITHUB_ENV
+      shell: pwsh
+
+    - name: Create or update Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: "v${{ github.event.inputs.version }}"
+        name: "FileHasher v${{ github.event.inputs.version }}"
+        body: |
+          Release of FileHasher.
+
+          **System Requirements:**
+          - Windows 10 version 1903 or later (includes .NET Framework 4.8)
+          - Windows 11 (includes .NET Framework 4.8)
+          - For older Windows versions, .NET Framework 4.8 may need to be installed separately
+
+          **Features:**
+          - ✅ **Single executable file** - No additional files needed
+          - ✅ **No installation required** - Just download and run
+          - ✅ **Portable** - Can be run from any location
+          - ✅ **Self-contained** - All dependencies merged into one file
+
+          **Changes in this version:**
+          - Migrated from .NET 8 to .NET Framework 4.8 for better compatibility
+          - Packaged as single executable using ILMerge
+          - No additional runtime installation required on modern Windows systems
+        files: "${{ env.ZIP_FILE_NAME }}"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
