@@ -30,6 +30,7 @@ namespace FileHasher
         private Label lblStatus;
         private ContextMenuStrip contextMenuStrip;
         private ToolStripMenuItem copyMenuItem;
+        private ListViewHitTestInfo _rightClickHitInfo; // 保存右键点击时的命中信息
 
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationToken token => _cancellationTokenSource != null ? _cancellationTokenSource.Token : CancellationToken.None;
@@ -123,8 +124,7 @@ namespace FileHasher
                 FullRowSelect = true,
                 GridLines = true,
                 MultiSelect = true,
-                AllowDrop = true,
-                HeaderStyle = ColumnHeaderStyle.Nonclickable  // 确保表头样式一致
+                AllowDrop = true
             };
             lvResults.Columns.Add("文件路径", 200, HorizontalAlignment.Left);  // 增加初始宽度并明确对齐方式
             lvResults.Columns.Add("大小", 80, HorizontalAlignment.Right);
@@ -603,9 +603,8 @@ namespace FileHasher
         // 右键菜单打开时的事件处理
         private void OnContextMenuOpening(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            // 检查是否有选中的项目和具体的单元格
-            var hitInfo = GetHitTestInfo();
-            copyMenuItem.Enabled = hitInfo.Item != null && hitInfo.SubItem != null;
+            // 使用保存的右键点击命中信息
+            copyMenuItem.Enabled = _rightClickHitInfo != null && _rightClickHitInfo.Item != null && _rightClickHitInfo.SubItem != null;
             copyMenuItem.Text = "复制";
         }
 
@@ -614,33 +613,27 @@ namespace FileHasher
         {
             if (e.Button == MouseButtons.Right)
             {
+                // 保存右键点击时的命中测试信息
+                _rightClickHitInfo = lvResults.HitTest(e.Location);
+
                 // 右键点击时选择对应的项目
-                var hitInfo = lvResults.HitTest(e.Location);
-                if (hitInfo.Item != null)
+                if (_rightClickHitInfo.Item != null)
                 {
-                    hitInfo.Item.Selected = true;
                     lvResults.SelectedItems.Clear();
-                    hitInfo.Item.Selected = true;
+                    _rightClickHitInfo.Item.Selected = true;
                 }
             }
-        }
-
-        // 获取当前鼠标位置的命中测试信息
-        private ListViewHitTestInfo GetHitTestInfo()
-        {
-            var mousePosition = lvResults.PointToClient(Control.MousePosition);
-            return lvResults.HitTest(mousePosition);
         }
 
         // 复制菜单项的点击事件
         private void OnCopyMenuItemClick(object sender, EventArgs e)
         {
-            var hitInfo = GetHitTestInfo();
-            if (hitInfo.Item != null && hitInfo.SubItem != null)
+            // 使用保存的右键点击命中信息
+            if (_rightClickHitInfo != null && _rightClickHitInfo.Item != null && _rightClickHitInfo.SubItem != null)
             {
                 try
                 {
-                    string textToCopy = hitInfo.SubItem.Text;
+                    string textToCopy = _rightClickHitInfo.SubItem.Text;
                     if (!string.IsNullOrEmpty(textToCopy))
                     {
                         Clipboard.SetText(textToCopy);
