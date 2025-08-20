@@ -131,6 +131,7 @@ namespace FileHasher
             };
             lvResults.Columns.Add("文件路径", 200, HorizontalAlignment.Left);  // 增加初始宽度并明确对齐方式
             lvResults.Columns.Add("大小", 80, HorizontalAlignment.Right);
+            lvResults.Columns.Add("", 1); // 占位列，保证宽度
 
             // 允许用户调整列宽和重新排序
             lvResults.AllowColumnReorder = true;
@@ -419,16 +420,19 @@ namespace FileHasher
 
         private void ResetListViewColumns(List<string> algorithms)
         {
-            // 移除除 "文件路径" 和 "大小" 之外的所有列
-            while (lvResults.Columns.Count > 2)
+            // 移除除 "文件路径"、"大小" 和占位列之外的所有列
+            // 保留占位列（最后一列），只删除中间的算法列
+            while (lvResults.Columns.Count > 3)
             {
-                lvResults.Columns.RemoveAt(2);
+                lvResults.Columns.RemoveAt(2); // 删除第3列（算法列），保留占位列在最后
             }
 
-            // 添加新的算法列
-            foreach (var alg in algorithms)
+            // 在占位列之前添加新的算法列
+            for (int i = 0; i < algorithms.Count; i++)
             {
-                lvResults.Columns.Add(alg, 150, HorizontalAlignment.Left);  // 设置合理的初始宽度和对齐方式
+                var alg = algorithms[i];
+                // 在倒数第二个位置插入（占位列之前）
+                lvResults.Columns.Insert(lvResults.Columns.Count - 1, alg, 150, HorizontalAlignment.Left);
             }
 
             // 清空所有子项结果
@@ -690,11 +694,12 @@ namespace FileHasher
         {
             using (var writer = new System.IO.StreamWriter(filePath, false, System.Text.Encoding.UTF8))
             {
-                // 写入表头
+                // 写入表头（排除占位列）
                 var headers = new List<string>();
-                foreach (ColumnHeader column in lvResults.Columns)
+                int columnsToExport = lvResults.Columns.Count - 1; // 排除最后的占位列
+                for (int i = 0; i < columnsToExport; i++)
                 {
-                    headers.Add(EscapeCsvField(column.Text));
+                    headers.Add(EscapeCsvField(lvResults.Columns[i].Text));
                 }
                 writer.WriteLine(string.Join(",", headers));
 
@@ -706,16 +711,17 @@ namespace FileHasher
                     // 添加主项文本（第一列）
                     values.Add(EscapeCsvField(item.Text));
 
-                    // 添加子项文本（其他列）
-                    foreach (ListViewItem.ListViewSubItem subItem in item.SubItems.Cast<ListViewItem.ListViewSubItem>().Skip(1))
+                    // 添加子项文本（其他列，但排除占位列）
+                    for (int i = 1; i < columnsToExport; i++)
                     {
-                        values.Add(EscapeCsvField(subItem.Text));
-                    }
-
-                    // 如果子项数量少于列数，用空字符串填充
-                    while (values.Count < lvResults.Columns.Count)
-                    {
-                        values.Add("");
+                        if (i < item.SubItems.Count)
+                        {
+                            values.Add(EscapeCsvField(item.SubItems[i].Text));
+                        }
+                        else
+                        {
+                            values.Add("");
+                        }
                     }
 
                     writer.WriteLine(string.Join(",", values));
@@ -751,7 +757,10 @@ namespace FileHasher
             {
                 lvResults.BeginUpdate();
 
-                for (int i = 0; i < lvResults.Columns.Count; i++)
+                // 只调整前面的有效列，不调整最后的占位列
+                int columnsToResize = lvResults.Columns.Count - 1; // 排除占位列
+
+                for (int i = 0; i < columnsToResize; i++)
                 {
                     // 同时考虑列头和内容的宽度
                     lvResults.AutoResizeColumn(i, ColumnHeaderAutoResizeStyle.HeaderSize);
@@ -762,6 +771,12 @@ namespace FileHasher
 
                     // 取两者中的较大值，确保表头和内容都能完全显示
                     lvResults.Columns[i].Width = Math.Max(headerWidth, contentWidth);
+                }
+
+                // 确保占位列始终保持最小宽度
+                if (lvResults.Columns.Count > 0)
+                {
+                    lvResults.Columns[lvResults.Columns.Count - 1].Width = 1;
                 }
             }
             finally

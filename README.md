@@ -2,7 +2,7 @@
 
 FileHasher 是一款现代化、高效率且用户友好的 Windows 桌面应用，旨在为您提供快速、可靠的文件哈希值计算体验。
 
-<img width="784" height="592" alt="image" src="https://github.com/user-attachments/assets/0c6f2997-376f-41da-b3da-7322d758cf42" />
+<img width="984" height="642" alt="image" src="https://github.com/user-attachments/assets/7a856744-9e08-472e-8867-19cab7864db2" />
 
 ## 💻 系统要求
 
