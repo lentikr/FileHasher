@@ -20,6 +20,7 @@ namespace FileHasher
         private Button btnStop;
         private Button btnRemoveSelected;
         private Button btnClearAll;
+        private Button btnExportCsv;
         private FlowLayoutPanel pnlAlgorithms;
         private CheckBox chkMD5;
         private CheckBox chkSHA1;
@@ -110,10 +111,12 @@ namespace FileHasher
             btnSelectFolder = new Button { Text = "选择目录...", Width = 120, Height = 30 };
             btnRemoveSelected = new Button { Text = "移除选中", Width = 120, Height = 30, Enabled = false };
             btnClearAll = new Button { Text = "全部清除", Width = 120, Height = 30, Enabled = false };
+            btnExportCsv = new Button { Text = "导出", Width = 120, Height = 30, Enabled = false };
             topPanel.Controls.Add(btnSelectFiles);
             topPanel.Controls.Add(btnSelectFolder);
             topPanel.Controls.Add(btnRemoveSelected);
             topPanel.Controls.Add(btnClearAll);
+            topPanel.Controls.Add(btnExportCsv);
             mainLayout.Controls.Add(topPanel, 0, 0);
 
             // --- 第二行：结果列表 ---
@@ -176,6 +179,7 @@ namespace FileHasher
             btnStop.Click += OnStopClick;
             btnRemoveSelected.Click += OnRemoveSelectedClick;
             btnClearAll.Click += OnClearAllClick;
+            btnExportCsv.Click += OnExportCsvClick;
             lvResults.SelectedIndexChanged += OnListViewSelectedIndexChanged;
             lvResults.DragEnter += OnDragEnter;
             lvResults.DragDrop += OnDragDrop;
@@ -237,6 +241,37 @@ namespace FileHasher
 
             // 清除文件后重置列宽为默认值
             ResetColumnWidths();
+        }
+
+        private void OnExportCsvClick(object sender, EventArgs e)
+        {
+            if (lvResults.Items.Count == 0)
+            {
+                MessageBox.Show("没有数据可以导出。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (var dialog = new SaveFileDialog())
+            {
+                dialog.Filter = "CSV 文件 (*.csv)|*.csv|所有文件 (*.*)|*.*";
+                dialog.DefaultExt = "csv";
+                dialog.FileName = $"FileHasher_Export_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+                dialog.Title = "导出到CSV文件";
+
+                if (dialog.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        ExportToCsv(dialog.FileName);
+                        lblStatus.Text = $"已成功导出到: {dialog.FileName}";
+                        MessageBox.Show($"导出成功！\n文件保存至: {dialog.FileName}", "导出完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"导出失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
         }
 
         private void OnListViewSelectedIndexChanged(object sender, EventArgs e)
@@ -569,6 +604,7 @@ namespace FileHasher
             btnStop.Enabled = isCalculating;
             btnClearAll.Enabled = !isCalculating && hasItems;
             btnRemoveSelected.Enabled = !isCalculating && hasItems && hasSelection;
+            btnExportCsv.Enabled = !isCalculating && hasItems;
 
             progressBar.Visible = isCalculating;
             lblStatus.Visible = !isCalculating;
@@ -647,6 +683,63 @@ namespace FileHasher
                     MessageBox.Show($"复制失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
+        }
+
+        // 导出数据到CSV文件
+        private void ExportToCsv(string filePath)
+        {
+            using (var writer = new System.IO.StreamWriter(filePath, false, System.Text.Encoding.UTF8))
+            {
+                // 写入表头
+                var headers = new List<string>();
+                foreach (ColumnHeader column in lvResults.Columns)
+                {
+                    headers.Add(EscapeCsvField(column.Text));
+                }
+                writer.WriteLine(string.Join(",", headers));
+
+                // 写入数据行
+                foreach (ListViewItem item in lvResults.Items)
+                {
+                    var values = new List<string>();
+
+                    // 添加主项文本（第一列）
+                    values.Add(EscapeCsvField(item.Text));
+
+                    // 添加子项文本（其他列）
+                    foreach (ListViewItem.ListViewSubItem subItem in item.SubItems.Cast<ListViewItem.ListViewSubItem>().Skip(1))
+                    {
+                        values.Add(EscapeCsvField(subItem.Text));
+                    }
+
+                    // 如果子项数量少于列数，用空字符串填充
+                    while (values.Count < lvResults.Columns.Count)
+                    {
+                        values.Add("");
+                    }
+
+                    writer.WriteLine(string.Join(",", values));
+                }
+            }
+        }
+
+        // CSV字段转义处理
+        private string EscapeCsvField(string field)
+        {
+            if (string.IsNullOrEmpty(field))
+            {
+                return "";
+            }
+
+            // 如果字段包含逗号、双引号或换行符，需要用双引号包围
+            if (field.Contains(",") || field.Contains("\"") || field.Contains("\r") || field.Contains("\n"))
+            {
+                // 双引号需要转义为两个双引号
+                field = field.Replace("\"", "\"\"");
+                return $"\"{field}\"";
+            }
+
+            return field;
         }
 
         // 自动调整所有列宽度的辅助方法
