@@ -129,8 +129,8 @@ namespace FileHasher
                 MultiSelect = true,
                 AllowDrop = true
             };
-            lvResults.Columns.Add("文件路径", 200, HorizontalAlignment.Left);  // 增加初始宽度并明确对齐方式
-            lvResults.Columns.Add("大小", 80, HorizontalAlignment.Right);
+            lvResults.Columns.Add("文件路径", -2, HorizontalAlignment.Left);  // -2 表示自动调整到内容宽度
+            lvResults.Columns.Add("大小", -2, HorizontalAlignment.Right);     // -2 表示自动调整到内容宽度
 
             // 允许用户调整列宽和重新排序
             lvResults.AllowColumnReorder = true;
@@ -753,14 +753,14 @@ namespace FileHasher
 
                 for (int i = 0; i < lvResults.Columns.Count; i++)
                 {
-                    // 同时考虑列头和内容的宽度
+                    // 分别计算表头和内容的宽度
                     lvResults.AutoResizeColumn(i, ColumnHeaderAutoResizeStyle.HeaderSize);
                     int headerWidth = lvResults.Columns[i].Width;
 
                     lvResults.AutoResizeColumn(i, ColumnHeaderAutoResizeStyle.ColumnContent);
                     int contentWidth = lvResults.Columns[i].Width;
 
-                    // 取两者中的较大值，确保表头和内容都能完全显示
+                    // 取两者中的较大值，这样既能显示完整表头，也能显示完整内容
                     lvResults.Columns[i].Width = Math.Max(headerWidth, contentWidth);
                 }
             }
