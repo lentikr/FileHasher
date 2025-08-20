@@ -28,6 +28,8 @@ namespace FileHasher
         private ListView lvResults;
         private ProgressBar progressBar;
         private Label lblStatus;
+        private ContextMenuStrip contextMenuStrip;
+        private ToolStripMenuItem copyMenuItem;
 
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationToken token => _cancellationTokenSource != null ? _cancellationTokenSource.Token : CancellationToken.None;
@@ -130,6 +132,9 @@ namespace FileHasher
             // 允许用户调整列宽和重新排序
             lvResults.AllowColumnReorder = true;
 
+            // 创建右键菜单
+            CreateContextMenu();
+
             mainLayout.Controls.Add(lvResults, 0, 1);
 
             // --- 第三行：状态和进度条 ---
@@ -174,6 +179,7 @@ namespace FileHasher
             lvResults.SelectedIndexChanged += OnListViewSelectedIndexChanged;
             lvResults.DragEnter += OnDragEnter;
             lvResults.DragDrop += OnDragDrop;
+            lvResults.MouseClick += OnListViewMouseClick;
         }
 
         // --- 事件处理器 ---
@@ -576,6 +582,76 @@ namespace FileHasher
                 else
                 {
                     lblStatus.Text = "请添加文件或将文件拖放到此处。";
+                }
+            }
+        }
+
+        // 创建右键菜单
+        private void CreateContextMenu()
+        {
+            contextMenuStrip = new ContextMenuStrip();
+
+            copyMenuItem = new ToolStripMenuItem("复制");
+            copyMenuItem.Click += OnCopyMenuItemClick;
+
+            contextMenuStrip.Items.Add(copyMenuItem);
+            contextMenuStrip.Opening += OnContextMenuOpening;
+
+            lvResults.ContextMenuStrip = contextMenuStrip;
+        }
+
+        // 右键菜单打开时的事件处理
+        private void OnContextMenuOpening(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            // 检查是否有选中的项目和具体的单元格
+            var hitInfo = GetHitTestInfo();
+            copyMenuItem.Enabled = hitInfo.Item != null && hitInfo.SubItem != null;
+            copyMenuItem.Text = "复制";
+        }
+
+        // 处理ListView的鼠标点击事件
+        private void OnListViewMouseClick(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                // 右键点击时选择对应的项目
+                var hitInfo = lvResults.HitTest(e.Location);
+                if (hitInfo.Item != null)
+                {
+                    hitInfo.Item.Selected = true;
+                    lvResults.SelectedItems.Clear();
+                    hitInfo.Item.Selected = true;
+                }
+            }
+        }
+
+        // 获取当前鼠标位置的命中测试信息
+        private ListViewHitTestInfo GetHitTestInfo()
+        {
+            var mousePosition = lvResults.PointToClient(Control.MousePosition);
+            return lvResults.HitTest(mousePosition);
+        }
+
+        // 复制菜单项的点击事件
+        private void OnCopyMenuItemClick(object sender, EventArgs e)
+        {
+            var hitInfo = GetHitTestInfo();
+            if (hitInfo.Item != null && hitInfo.SubItem != null)
+            {
+                try
+                {
+                    string textToCopy = hitInfo.SubItem.Text;
+                    if (!string.IsNullOrEmpty(textToCopy))
+                    {
+                        Clipboard.SetText(textToCopy);
+
+                        // 可选：显示复制成功的提示
+                        lblStatus.Text = $"已复制: {(textToCopy.Length > 50 ? textToCopy.Substring(0, 50) + "..." : textToCopy)}";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"复制失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
